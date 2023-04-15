@@ -1,39 +1,20 @@
-﻿using System.Reflection;
-using System.Runtime.CompilerServices;
+﻿using MelonLoader;
+using System.Reflection;
 using System.Runtime.InteropServices;
-using MelonLoader;
 
-// General Information about an assembly is controlled through the following
-// set of attributes. Change these attribute values to modify the information
-// associated with an assembly.
+//This is a C# comment. Comments have no impact on compilation.
+
+//ModName, ModVersion, ModAuthor, and ModNamespace.ModClassInheritingFromMelonMod all need changed.
+
 [assembly: AssemblyTitle("LimitlessContainerSpace")]
-[assembly: AssemblyDescription("")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("LimitlessContainerSpace")]
-[assembly: AssemblyCopyright("Copyright ©  2021")]
-[assembly: AssemblyTrademark("")]
-[assembly: AssemblyCulture("")]
+[assembly: AssemblyCopyright("Created by ds5678, Atlas Lumi")]
 
-// Setting ComVisible to false makes the types in this assembly not visible
-// to COM components.  If you need to access a type in this assembly from
-// COM, set the ComVisible attribute to true on that type.
-[assembly: ComVisible(false)]
+//Version numbers in C# are a set of 1 to 4 positive integers separated by periods.
+//Mods typically use 3 numbers. For example: 1.2.1
+//The mod version need specified in three places.
+[assembly: AssemblyVersion("2.0")]
+[assembly: AssemblyFileVersion("2.0")]
+[assembly: MelonInfo(typeof(LimitlessContainerSpace.Implementation), "LimitlessContainerSpace", "2.0", "ds5678, Atlas Lumi")]
 
-// The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("7d71f26d-1888-4237-8859-d6898d9e628c")]
-
-// Version information for an assembly consists of the following four values:
-//
-//      Major Version
-//      Minor Version
-//      Build Number
-//      Revision
-//
-// You can specify all the values or you can default the Build and Revision Numbers
-// by using the '*' as shown below:
-// [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.0")]
-[assembly: AssemblyFileVersion("1.0.0")]
-[assembly: MelonInfo(typeof(LimitlessContainerSpace.Implementation), "LimitlessContainerSpace", "1.0.0", "ds5678")]
+//This tells MelonLoader that the mod is only for The Long Dark.
 [assembly: MelonGame("Hinterland", "TheLongDark")]
