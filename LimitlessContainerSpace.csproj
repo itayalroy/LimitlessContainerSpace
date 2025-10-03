@@ -3,7 +3,7 @@
 
     <PropertyGroup>
         <!--This needs to be changed for the mod to compile.-->
-        <TheLongDarkPath>C:\Program Files (x86)\Steam\steamapps\common\TheLongDark</TheLongDarkPath>
+        <TheLongDarkPath>C:\Users\itaya\Desktop\The Long Dark</TheLongDarkPath>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -110,6 +110,7 @@
         <Reference Include="Il2CppTLD.Stats" />
         <Reference Include="Il2CppTLD.TimeLib" />
         <Reference Include="Il2CppTLD.Trial" />
+        <Reference Include="Il2CppTLD.IntBackedUnit" />
         <Reference Include="Il2CppTLD.UserGeneratedContent" />
         <Reference Include="Il2CppTotalBaker.Runtime" />
         <Reference Include="Il2CppUniStorm.Runtime" />
