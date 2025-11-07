@@ -10,6 +10,11 @@ namespace BeachcombingDetector
     internal sealed class Implementation : MelonMod
     {
         private const float SEARCH_RADIUS = 5f; // Search within 5 meters of spawn point
+        private const float DISPLAY_DURATION = 10f; // Show results for 10 seconds
+        
+        private List<string> scanResults = new List<string>();
+        private float displayTimer = 0f;
+        private bool showResults = false;
         
         public override void OnInitializeMelon()
         {
@@ -25,18 +30,73 @@ namespace BeachcombingDetector
                 MelonLogger.Msg("=== Scanning for Beachcombing Items ===");
                 ScanBeachcombingLocations();
             }
+            
+            // Update display timer
+            if (showResults)
+            {
+                displayTimer -= Time.deltaTime;
+                if (displayTimer <= 0f)
+                {
+                    showResults = false;
+                }
+            }
+        }
+        
+        public override void OnGUI()
+        {
+            if (!showResults || scanResults.Count == 0) return;
+            
+            // Create a semi-transparent background box
+            float boxWidth = 500f;
+            float boxHeight = 30f + (scanResults.Count * 25f); // Header + items
+            float boxX = 20f; // Left side of screen
+            float boxY = 100f; // Top of screen
+            
+            // Draw background
+            GUI.color = new Color(0f, 0f, 0f, 0.8f);
+            GUI.Box(new Rect(boxX, boxY, boxWidth, boxHeight), "");
+            
+            // Draw text
+            GUI.color = Color.white;
+            GUIStyle headerStyle = new GUIStyle(GUI.skin.label);
+            headerStyle.fontSize = 16;
+            headerStyle.fontStyle = FontStyle.Bold;
+            headerStyle.normal.textColor = Color.yellow;
+            
+            GUIStyle itemStyle = new GUIStyle(GUI.skin.label);
+            itemStyle.fontSize = 14;
+            itemStyle.normal.textColor = Color.white;
+            
+            // Header
+            GUI.Label(new Rect(boxX + 10f, boxY + 5f, boxWidth - 20f, 25f), 
+                      $"Beachcombing Items ({(int)displayTimer}s remaining)", headerStyle);
+            
+            // Items
+            float yPos = boxY + 30f;
+            foreach (string result in scanResults)
+            {
+                GUI.Label(new Rect(boxX + 10f, yPos, boxWidth - 20f, 25f), result, itemStyle);
+                yPos += 25f;
+            }
+            
+            GUI.color = Color.white;
         }
         
         private void ScanBeachcombingLocations()
         {
             try
             {
+                // Clear previous results
+                scanResults.Clear();
+                
                 // Find all BeachcombingSpawner instances in the scene
                 BeachcombingSpawner[] spawners = GameObject.FindObjectsOfType<BeachcombingSpawner>();
                 
                 if (spawners == null || spawners.Length == 0)
                 {
-                    MelonLogger.Msg("[BeachcombingDetector] No BeachcombingSpawner found in scene");
+                    scanResults.Add("No beachcombing spawner found");
+                    showResults = true;
+                    displayTimer = DISPLAY_DURATION;
                     return;
                 }
                 
@@ -51,7 +111,14 @@ namespace BeachcombingDetector
                     ScanRadialSpawners(spawner);
                 }
                 
-                MelonLogger.Msg("[BeachcombingDetector] Scan complete!");
+                if (scanResults.Count == 0)
+                {
+                    scanResults.Add("No items found on beach");
+                }
+                
+                // Show results for 10 seconds
+                showResults = true;
+                displayTimer = DISPLAY_DURATION;
             }
             catch (System.Exception ex)
             {
@@ -123,7 +190,7 @@ namespace BeachcombingDetector
                 // Find all colliders within radius
                 Collider[] colliders = Physics.OverlapSphere(position, SEARCH_RADIUS);
                 
-                bool foundItems = false;
+                List<string> foundItems = new List<string>();
                 
                 foreach (Collider collider in colliders)
                 {
@@ -136,12 +203,6 @@ namespace BeachcombingDetector
                     GearItem gearItem = obj.GetComponent<GearItem>();
                     if (gearItem != null)
                     {
-                        if (!foundItems)
-                        {
-                            MelonLogger.Msg($"[BeachcombingDetector] {locationName} at {position}:");
-                            foundItems = true;
-                        }
-                        
                         string itemName = gearItem.name;
                         try
                         {
@@ -152,7 +213,7 @@ namespace BeachcombingDetector
                         }
                         catch { }
                         
-                        MelonLogger.Msg($"  -> ITEM: {itemName} ({obj.name}) - {distance:F2}m away");
+                        foundItems.Add($"• {itemName}");
                         continue;
                     }
                     
@@ -160,14 +221,17 @@ namespace BeachcombingDetector
                     Container container = obj.GetComponent<Container>();
                     if (container != null)
                     {
-                        if (!foundItems)
-                        {
-                            MelonLogger.Msg($"[BeachcombingDetector] {locationName} at {position}:");
-                            foundItems = true;
-                        }
-                        
-                        MelonLogger.Msg($"  -> CONTAINER: {obj.name} - {distance:F2}m away");
+                        foundItems.Add($"• Container ({obj.name})");
                         continue;
+                    }
+                }
+                
+                // Add found items to results
+                if (foundItems.Count > 0)
+                {
+                    foreach (string item in foundItems)
+                    {
+                        scanResults.Add(item);
                     }
                 }
             }
