@@ -7,19 +7,29 @@ using System.Collections.Generic;
 
 namespace BeachcombingDetector
 {
+    // Class to store tracked beachcombing items
+    internal class BeachcombingItem
+    {
+        public GameObject GameObject;
+        public string DisplayName;
+        public float Distance;
+        public bool IsContainer;
+    }
+    
     internal sealed class Implementation : MelonMod
     {
         private const float SEARCH_RADIUS = 5f; // Search within 5 meters of spawn point
-        private const float DISPLAY_DURATION = 10f; // Show results for 10 seconds
+        private const float DISTANCE_UPDATE_INTERVAL = 0.25f; // Update distances 4 times per second
         
-        private List<string> scanResults = new List<string>();
-        private float displayTimer = 0f;
+        private List<BeachcombingItem> trackedItems = new List<BeachcombingItem>();
+        private float distanceUpdateTimer = 0f;
         private bool showResults = false;
         
         public override void OnInitializeMelon()
         {
             MelonLogger.Msg("Beachcombing Detector mod loaded!");
             MelonLogger.Msg("- Press F9 to scan for beachcombing items");
+            MelonLogger.Msg("- Press F9 again to hide/rescan");
         }
         
         public override void OnUpdate()
@@ -27,28 +37,37 @@ namespace BeachcombingDetector
             // Manual scan with F9 key
             if (Input.GetKeyDown(KeyCode.F9))
             {
-                MelonLogger.Msg("=== Scanning for Beachcombing Items ===");
+                if (showResults)
+                {
+                    // If already showing, rescan to update
+                    MelonLogger.Msg("=== Rescanning for Beachcombing Items ===");
+                }
+                else
+                {
+                    MelonLogger.Msg("=== Scanning for Beachcombing Items ===");
+                }
                 ScanBeachcombingLocations();
             }
             
-            // Update display timer
-            if (showResults)
+            // Update distances periodically when results are shown
+            if (showResults && trackedItems.Count > 0)
             {
-                displayTimer -= Time.deltaTime;
-                if (displayTimer <= 0f)
+                distanceUpdateTimer += Time.deltaTime;
+                if (distanceUpdateTimer >= DISTANCE_UPDATE_INTERVAL)
                 {
-                    showResults = false;
+                    distanceUpdateTimer = 0f;
+                    UpdateDistances();
                 }
             }
         }
         
         public override void OnGUI()
         {
-            if (!showResults || scanResults.Count == 0) return;
+            if (!showResults || trackedItems.Count == 0) return;
             
             // Create a semi-transparent background box
             float boxWidth = 500f;
-            float boxHeight = 30f + (scanResults.Count * 25f); // Header + items
+            float boxHeight = 30f + (trackedItems.Count * 25f); // Header + items
             float boxX = 20f; // Left side of screen
             float boxY = 100f; // Top of screen
             
@@ -69,17 +88,43 @@ namespace BeachcombingDetector
             
             // Header
             GUI.Label(new Rect(boxX + 10f, boxY + 5f, boxWidth - 20f, 25f), 
-                      $"Beachcombing Items ({(int)displayTimer}s remaining)", headerStyle);
+                      $"Beachcombing Items (F9 to rescan)", headerStyle);
             
-            // Items
+            // Items with distances
             float yPos = boxY + 30f;
-            foreach (string result in scanResults)
+            foreach (BeachcombingItem item in trackedItems)
             {
-                GUI.Label(new Rect(boxX + 10f, yPos, boxWidth - 20f, 25f), result, itemStyle);
+                string displayText = $"• {item.DisplayName} - {item.Distance:F0}m";
+                GUI.Label(new Rect(boxX + 10f, yPos, boxWidth - 20f, 25f), displayText, itemStyle);
                 yPos += 25f;
             }
             
             GUI.color = Color.white;
+        }
+        
+        private void UpdateDistances()
+        {
+            try
+            {
+                // Get player position
+                GameObject playerObject = GameManager.GetPlayerObject();
+                if (playerObject == null) return;
+                
+                Vector3 playerPos = playerObject.transform.position;
+                
+                // Update distance for each tracked item
+                foreach (BeachcombingItem item in trackedItems)
+                {
+                    if (item.GameObject != null)
+                    {
+                        item.Distance = Vector3.Distance(playerPos, item.GameObject.transform.position);
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in UpdateDistances: {ex}");
+            }
         }
         
         private void ScanBeachcombingLocations()
@@ -87,16 +132,15 @@ namespace BeachcombingDetector
             try
             {
                 // Clear previous results
-                scanResults.Clear();
+                trackedItems.Clear();
                 
                 // Find all BeachcombingSpawner instances in the scene
                 BeachcombingSpawner[] spawners = GameObject.FindObjectsOfType<BeachcombingSpawner>();
                 
                 if (spawners == null || spawners.Length == 0)
                 {
-                    scanResults.Add("No beachcombing spawner found");
-                    showResults = true;
-                    displayTimer = DISPLAY_DURATION;
+                    showResults = false;
+                    MelonLogger.Msg("No beachcombing spawner found");
                     return;
                 }
                 
@@ -111,14 +155,18 @@ namespace BeachcombingDetector
                     ScanRadialSpawners(spawner);
                 }
                 
-                if (scanResults.Count == 0)
+                if (trackedItems.Count == 0)
                 {
-                    scanResults.Add("No items found on beach");
+                    showResults = false;
+                    MelonLogger.Msg("No items found on beach");
                 }
-                
-                // Show results for 10 seconds
-                showResults = true;
-                displayTimer = DISPLAY_DURATION;
+                else
+                {
+                    // Show results and update distances immediately
+                    showResults = true;
+                    UpdateDistances();
+                    MelonLogger.Msg($"Found {trackedItems.Count} beachcombing item(s)");
+                }
             }
             catch (System.Exception ex)
             {
@@ -190,14 +238,11 @@ namespace BeachcombingDetector
                 // Find all colliders within radius
                 Collider[] colliders = Physics.OverlapSphere(position, SEARCH_RADIUS);
                 
-                List<string> foundItems = new List<string>();
-                
                 foreach (Collider collider in colliders)
                 {
                     if (collider == null || collider.gameObject == null) continue;
                     
                     GameObject obj = collider.gameObject;
-                    float distance = Vector3.Distance(position, obj.transform.position);
                     
                     // Check for GearItem component (items in the world)
                     GearItem gearItem = obj.GetComponent<GearItem>();
@@ -213,7 +258,14 @@ namespace BeachcombingDetector
                         }
                         catch { }
                         
-                        foundItems.Add($"• {itemName}");
+                        // Add to tracked items
+                        trackedItems.Add(new BeachcombingItem
+                        {
+                            GameObject = obj,
+                            DisplayName = itemName,
+                            Distance = 0f, // Will be calculated in UpdateDistances
+                            IsContainer = false
+                        });
                         continue;
                     }
                     
@@ -221,17 +273,15 @@ namespace BeachcombingDetector
                     Container container = obj.GetComponent<Container>();
                     if (container != null)
                     {
-                        foundItems.Add($"• Container ({obj.name})");
+                        // Add to tracked items
+                        trackedItems.Add(new BeachcombingItem
+                        {
+                            GameObject = obj,
+                            DisplayName = $"Container ({obj.name})",
+                            Distance = 0f, // Will be calculated in UpdateDistances
+                            IsContainer = true
+                        });
                         continue;
-                    }
-                }
-                
-                // Add found items to results
-                if (foundItems.Count > 0)
-                {
-                    foreach (string item in foundItems)
-                    {
-                        scanResults.Add(item);
                     }
                 }
             }
