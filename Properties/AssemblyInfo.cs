@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 //ModName, ModVersion, ModAuthor, and ModNamespace.ModClassInheritingFromMelonMod all need changed.
 
-[assembly: AssemblyTitle("EnhancedBloodTrail")]
+[assembly: AssemblyTitle("BeachcombingDetector")]
 [assembly: AssemblyCopyright("Created by Atlas Lumi")]
 
 //Version numbers in C# are a set of 1 to 4 positive integers separated by periods.
@@ -14,7 +14,7 @@ using System.Runtime.InteropServices;
 //The mod version need specified in three places.
 [assembly: AssemblyVersion("1.0.0")]
 [assembly: AssemblyFileVersion("1.0.0")]
-[assembly: MelonInfo(typeof(EnhancedBloodTrail.Implementation), "EnhancedBloodTrail", "1.0.0", "Atlas Lumi")]
+[assembly: MelonInfo(typeof(BeachcombingDetector.Implementation), "BeachcombingDetector", "1.0.0", "Atlas Lumi")]
 
 //This tells MelonLoader that the mod is only for The Long Dark.
 [assembly: MelonGame("Hinterland", "TheLongDark")]

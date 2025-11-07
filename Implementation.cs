@@ -1,168 +1,180 @@
 ﻿using MelonLoader;
 using HarmonyLib;
 using Il2Cpp;
+using Il2CppTLD.Gameplay;
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace EnhancedBloodTrail
+namespace BeachcombingDetector
 {
-    // Static storage for tracking injured animals
-    public static class InjuredAnimalTracker
-    {
-        public static Dictionary<GameObject, GameObject> TrackedMarkers = new Dictionary<GameObject, GameObject>();
-        public static List<GameObject> TextObjects = new List<GameObject>();
-        
-        // Update text rotations to face camera
-        public static void UpdateTextRotations()
-        {
-            Camera mainCam = Camera.main;
-            if (mainCam == null) return;
-            
-            // Clean up null references
-            TextObjects.RemoveAll(obj => obj == null);
-            
-            foreach (GameObject textObj in TextObjects)
-            {
-                if (textObj != null && textObj.transform != null)
-                {
-                    textObj.transform.rotation = mainCam.transform.rotation;
-                }
-            }
-        }
-    }
-
-    // Patch to detect when blood trail starts (animal is injured) and enable wallhack rendering
-    [HarmonyPatch(typeof(BloodTrail), nameof(BloodTrail.Awake))]
-    internal class BloodTrail_Awake
-    {
-        private static void Postfix(BloodTrail __instance)
-        {
-            try
-            {
-                MelonLogger.Msg($"[EnhancedBloodTrail] BloodTrail.Awake called on {__instance.gameObject.name}");
-                
-                // The BloodTrail is attached to the injured animal
-                EnableWallhackForAnimal(__instance.gameObject);
-            }
-            catch (System.Exception ex)
-            {
-                MelonLogger.Error($"[EnhancedBloodTrail] Error in BloodTrail.Awake: {ex}");
-            }
-        }
-
-        private static void EnableWallhackForAnimal(GameObject animalObject)
-        {
-            try
-            {
-                MelonLogger.Msg($"[EnhancedBloodTrail] EnableWallhackForAnimal called for: {animalObject.name}");
-
-                // Don't create multiple markers for the same animal
-                if (InjuredAnimalTracker.TrackedMarkers.ContainsKey(animalObject))
-                {
-                    MelonLogger.Msg($"[EnhancedBloodTrail] Animal already has a marker");
-                    return;
-                }
-
-                // Get animal's health
-                NPCCondition npcCondition = animalObject.GetComponent<NPCCondition>();
-                float healthPercent = 100f;
-                if (npcCondition != null)
-                {
-                    healthPercent = (npcCondition.m_CurrentHP / npcCondition.m_MaxHP) * 100f;
-                }
-
-                // Create a sphere marker above the animal
-                GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                marker.name = "InjuredAnimalMarker";
-                marker.transform.SetParent(animalObject.transform);
-                marker.transform.localPosition = new Vector3(0, 2f, 0); // 2 meters above animal
-                marker.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f); // Small sphere
-                
-                // Remove collider so it doesn't interfere with gameplay
-                UnityEngine.Object.Destroy(marker.GetComponent<Collider>());
-                
-                // Setup sphere material with wallhack shader
-                Renderer markerRenderer = marker.GetComponent<Renderer>();
-                if (markerRenderer != null)
-                {
-                    Material mat = markerRenderer.material;
-                    
-                    Shader textShader = Shader.Find("GUI/Text Shader");
-                    if (textShader != null)
-                    {
-                        mat.shader = textShader;
-                    }
-                    
-                    if (mat.HasProperty("_Cull"))
-                        mat.SetInt("_Cull", 0);
-                    
-                    if (mat.HasProperty("_ZTest"))
-                        mat.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
-                    
-                    if (mat.HasProperty("_ZWrite"))
-                        mat.SetInt("_ZWrite", 0);
-                    
-                    mat.color = new Color(1f, 0f, 0f, 1f);
-                    mat.renderQueue = 5000;
-                }
-                
-                // Create text showing health percentage
-                GameObject textObj = new GameObject("HealthText");
-                textObj.transform.SetParent(marker.transform);
-                textObj.transform.localPosition = new Vector3(0, 0.5f, 0); // Above the sphere
-                textObj.transform.localScale = Vector3.one * 0.1f;
-                
-                // Add TextMesh component
-                TextMesh textMesh = textObj.AddComponent<TextMesh>();
-                textMesh.text = $"{healthPercent:F0}%";
-                textMesh.fontSize = 50;
-                textMesh.color = Color.white;
-                textMesh.anchor = TextAnchor.MiddleCenter;
-                textMesh.alignment = TextAlignment.Center;
-                
-                // Add to list for rotation updates
-                InjuredAnimalTracker.TextObjects.Add(textObj);
-                
-                // Set text material to render through walls
-                Renderer textRenderer = textObj.GetComponent<Renderer>();
-                if (textRenderer != null && textRenderer.material != null)
-                {
-                    Material textMat = textRenderer.material;
-                    
-                    if (textMat.HasProperty("_ZTest"))
-                        textMat.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
-                    
-                    if (textMat.HasProperty("_ZWrite"))
-                        textMat.SetInt("_ZWrite", 0);
-                    
-                    textMat.renderQueue = 5000;
-                }
-                
-                // Track the marker
-                InjuredAnimalTracker.TrackedMarkers[animalObject] = marker;
-                
-                MelonLogger.Msg($"[EnhancedBloodTrail] Marker with health text ({healthPercent:F0}%) created for {animalObject.name}");
-            }
-            catch (System.Exception e)
-            {
-                MelonLogger.Error($"[EnhancedBloodTrail] Error in EnableWallhackForAnimal: {e}");
-            }
-        }
-    }
-
     internal sealed class Implementation : MelonMod
     {
+        private const float SEARCH_RADIUS = 5f; // Search within 5 meters of spawn point
+        
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Enhanced Blood Trail mod loaded!");
-            MelonLogger.Msg("- Injured animals marked with red sphere and health percentage");
-            MelonLogger.Msg("- Markers visible through walls (wallhack)");
+            MelonLogger.Msg("Beachcombing Detector mod loaded!");
+            MelonLogger.Msg("- Press F9 to scan for beachcombing items");
         }
         
         public override void OnUpdate()
         {
-            // Update text rotations every frame to face camera
-            InjuredAnimalTracker.UpdateTextRotations();
+            // Manual scan with F9 key
+            if (Input.GetKeyDown(KeyCode.F9))
+            {
+                MelonLogger.Msg("=== Scanning for Beachcombing Items ===");
+                ScanBeachcombingLocations();
+            }
+        }
+        
+        private void ScanBeachcombingLocations()
+        {
+            try
+            {
+                // Find all BeachcombingSpawner instances in the scene
+                BeachcombingSpawner[] spawners = GameObject.FindObjectsOfType<BeachcombingSpawner>();
+                
+                if (spawners == null || spawners.Length == 0)
+                {
+                    MelonLogger.Msg("[BeachcombingDetector] No BeachcombingSpawner found in scene");
+                    return;
+                }
+                
+                foreach (BeachcombingSpawner spawner in spawners)
+                {
+                    if (spawner == null) continue;
+                    
+                    // Scan Big Item Locations
+                    ScanBigItemLocations(spawner);
+                    
+                    // Scan Radial Spawners
+                    ScanRadialSpawners(spawner);
+                }
+                
+                MelonLogger.Msg("[BeachcombingDetector] Scan complete!");
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in ScanBeachcombingLocations: {ex}");
+            }
+        }
+        
+        private void ScanBigItemLocations(BeachcombingSpawner spawner)
+        {
+            try
+            {
+                var bigItemLocations = spawner.m_BigItemLocations;
+                
+                if (bigItemLocations == null || bigItemLocations.Count == 0)
+                {
+                    return;
+                }
+                
+                for (int i = 0; i < bigItemLocations.Count; i++)
+                {
+                    var location = bigItemLocations[i];
+                    if (location == null) continue;
+                    
+                    // Get the position of this location
+                    Vector3 locationPos = location.transform.position;
+                    
+                    // Search for nearby objects
+                    SearchNearbyObjects(locationPos, $"Big Item Location #{i}");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in ScanBigItemLocations: {ex}");
+            }
+        }
+        
+        private void ScanRadialSpawners(BeachcombingSpawner spawner)
+        {
+            try
+            {
+                var childSpawners = spawner.m_ChildSpawners;
+                
+                if (childSpawners == null || childSpawners.Count == 0)
+                {
+                    return;
+                }
+                
+                for (int i = 0; i < childSpawners.Count; i++)
+                {
+                    var radialSpawner = childSpawners[i];
+                    if (radialSpawner == null) continue;
+                    
+                    Vector3 spawnerPos = radialSpawner.transform.position;
+                    
+                    // Search for nearby objects
+                    SearchNearbyObjects(spawnerPos, $"Radial Spawner #{i}");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in ScanRadialSpawners: {ex}");
+            }
+        }
+        
+        private void SearchNearbyObjects(Vector3 position, string locationName)
+        {
+            try
+            {
+                // Find all colliders within radius
+                Collider[] colliders = Physics.OverlapSphere(position, SEARCH_RADIUS);
+                
+                bool foundItems = false;
+                
+                foreach (Collider collider in colliders)
+                {
+                    if (collider == null || collider.gameObject == null) continue;
+                    
+                    GameObject obj = collider.gameObject;
+                    float distance = Vector3.Distance(position, obj.transform.position);
+                    
+                    // Check for GearItem component (items in the world)
+                    GearItem gearItem = obj.GetComponent<GearItem>();
+                    if (gearItem != null)
+                    {
+                        if (!foundItems)
+                        {
+                            MelonLogger.Msg($"[BeachcombingDetector] {locationName} at {position}:");
+                            foundItems = true;
+                        }
+                        
+                        string itemName = gearItem.name;
+                        try
+                        {
+                            // Try to get display name if available
+                            string displayName = gearItem.DisplayName;
+                            if (!string.IsNullOrEmpty(displayName))
+                                itemName = displayName;
+                        }
+                        catch { }
+                        
+                        MelonLogger.Msg($"  -> ITEM: {itemName} ({obj.name}) - {distance:F2}m away");
+                        continue;
+                    }
+                    
+                    // Check for Container component
+                    Container container = obj.GetComponent<Container>();
+                    if (container != null)
+                    {
+                        if (!foundItems)
+                        {
+                            MelonLogger.Msg($"[BeachcombingDetector] {locationName} at {position}:");
+                            foundItems = true;
+                        }
+                        
+                        MelonLogger.Msg($"  -> CONTAINER: {obj.name} - {distance:F2}m away");
+                        continue;
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in SearchNearbyObjects: {ex}");
+            }
         }
     }
 }
