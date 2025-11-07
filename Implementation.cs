@@ -28,25 +28,26 @@ namespace BeachcombingDetector
         public override void OnInitializeMelon()
         {
             MelonLogger.Msg("Beachcombing Detector mod loaded!");
-            MelonLogger.Msg("- Press F9 to scan for beachcombing items");
-            MelonLogger.Msg("- Press F9 again to hide/rescan");
+            MelonLogger.Msg("- Press F9 to toggle beachcombing item overlay");
         }
         
         public override void OnUpdate()
         {
-            // Manual scan with F9 key
+            // Toggle overlay with F9 key
             if (Input.GetKeyDown(KeyCode.F9))
             {
                 if (showResults)
                 {
-                    // If already showing, rescan to update
-                    MelonLogger.Msg("=== Rescanning for Beachcombing Items ===");
+                    // Hide overlay if already showing
+                    showResults = false;
+                    MelonLogger.Msg("=== Beachcombing overlay hidden ===");
                 }
                 else
                 {
+                    // Scan and show overlay
                     MelonLogger.Msg("=== Scanning for Beachcombing Items ===");
+                    ScanBeachcombingLocations();
                 }
-                ScanBeachcombingLocations();
             }
             
             // Update distances periodically when results are shown
@@ -88,7 +89,7 @@ namespace BeachcombingDetector
             
             // Header
             GUI.Label(new Rect(boxX + 10f, boxY + 5f, boxWidth - 20f, 25f), 
-                      $"Beachcombing Items (F9 to rescan)", headerStyle);
+                      $"Beachcombing Items (F9 to hide)", headerStyle);
             
             // Items with distances
             float yPos = boxY + 30f;
