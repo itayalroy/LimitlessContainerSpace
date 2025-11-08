@@ -2,11 +2,23 @@
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppTLD.Gameplay;
+using Il2CppInterop.Runtime;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace BeachcombingDetector
 {
+    [HarmonyPatch(typeof(RadialObjectSpawner), "GetDistanceFromOuterRadiusToCamera")]
+    public class GetDistanceFromOuterRadiusToCameraPatch
+    {
+        static bool Prefix(ref float __result)
+        {
+            __result = 0f; // Always within range
+            return false; // Skip original method
+        }
+    }
+
     // Class to store tracked beachcombing items
     internal class BeachcombingItem
     {
@@ -31,6 +43,7 @@ namespace BeachcombingDetector
         {
             MelonLogger.Msg("Beachcombing Detector mod loaded!");
             MelonLogger.Msg("- Press F3 to toggle beachcombing item overlay");
+            MelonLogger.Msg("- Patched RadialObjectSpawner to bypass distance checks");
         }
         
         public override void OnUpdate()
@@ -293,18 +306,33 @@ namespace BeachcombingDetector
                     var radialSpawner = childSpawners[i];
                     if (radialSpawner == null) continue;
                     
-                    // Force spawn items without visibility checks
+                    // Print radial spawner info when first found
+                    MelonLogger.Msg($"=== Radial Spawner #{i} Info ===");
                     try
                     {
-                        radialSpawner.SpawnAttemptAllNoVisChecks();
-                        MelonLogger.Msg($"Forced spawn attempt on radial spawner #{i}");
+                        MelonLogger.Msg($"  Name: {radialSpawner.name}");
+                        MelonLogger.Msg($"  Position: {radialSpawner.transform.position}");
+                        MelonLogger.Msg($"  IsActive: {radialSpawner.IsActive}");
+                        MelonLogger.Msg($"  HasSpawned: {radialSpawner.HasSpawned()}");
+                        MelonLogger.Msg($"  s_EnableVisChecks: {RadialObjectSpawner.s_EnableVisChecks}");
+                        MelonLogger.Msg($"  MinRadius: {radialSpawner.m_MinRadius}");
+                        MelonLogger.Msg($"  MaxRadius: {radialSpawner.m_MaxRadius}");
+                        MelonLogger.Msg($"  MinToSpawn: {radialSpawner.m_MinToSpawn}");
+                        MelonLogger.Msg($"  MaxToSpawn: {radialSpawner.m_MaxToSpawn}");
+                        MelonLogger.Msg($"  NumToSpawn: {radialSpawner.NumToSpawn()}");
+                        
+                        if (radialSpawner.m_Spawns != null)
+                            MelonLogger.Msg($"  Current Spawns: {radialSpawner.m_Spawns.Count}");
+                        
+                        if (radialSpawner.m_PendingSpawns != null)
+                            MelonLogger.Msg($"  Pending Spawns: {radialSpawner.m_PendingSpawns.Count}");
                     }
                     catch (System.Exception ex)
                     {
-                        MelonLogger.Warning($"Could not force spawn on radial spawner #{i}: {ex.Message}");
+                        MelonLogger.Warning($"Error getting radial spawner info: {ex.Message}");
                     }
                     
-                    // Check spawned objects from this radial spawner
+                    // Check spawned objects from this radial spawner (no need to force spawn anymore)
                     ScanRadialSpawnerSpawns(radialSpawner);
                 }
             }

@@ -27,6 +27,9 @@
 
         <!--PDB files are mostly useless for modding since they can't be loaded.-->
         <DebugType>none</DebugType>
+        
+        <!--Enable unsafe code for IL2CPP interop-->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <!--This tells the compiler where to look for assemblies. Don't change it.-->
