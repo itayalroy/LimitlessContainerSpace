@@ -19,6 +19,16 @@ namespace BeachcombingDetector
         }
     }
 
+    [HarmonyPatch(typeof(BeachcombingSpawner), "IsPlayerCloseToAnyBigItemSpawnLocations")]
+    public class IsPlayerCloseToAnyBigItemSpawnLocationsPatch
+    {
+        static bool Prefix(ref bool __result)
+        {
+            __result = false;
+            return false; // Skip original method
+        }
+    }
+
     // Class to store tracked beachcombing items
     internal class BeachcombingItem
     {
