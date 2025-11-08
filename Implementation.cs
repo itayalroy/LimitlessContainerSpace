@@ -157,9 +157,6 @@ namespace BeachcombingDetector
                 {
                     if (spawner == null) continue;
                     
-                    // Check already-spawned big items
-                    ScanSpawnedBigItems(spawner);
-                    
                     // Scan big item locations with Physics
                     ScanBigItemLocations(spawner);
                     
@@ -183,110 +180,6 @@ namespace BeachcombingDetector
             catch (System.Exception ex)
             {
                 MelonLogger.Error($"[BeachcombingDetector] Error in ScanBeachcombingLocations: {ex}");
-            }
-        }
-        
-        private void ScanSpawnedBigItems(BeachcombingSpawner spawner)
-        {
-            try
-            {
-                // Method 1: Check m_OldBigItems (legacy items)
-                var oldBigItems = spawner.m_OldBigItems;
-                
-                if (oldBigItems != null && oldBigItems.Count > 0)
-                {
-                    for (int i = 0; i < oldBigItems.Count; i++)
-                    {
-                        var customSpawnedItem = oldBigItems[i];
-                        if (customSpawnedItem == null) continue;
-                        
-                        AddBigItemToTracked(customSpawnedItem, "(old)");
-                    }
-                }
-                
-                // Method 2: Check each big item location's Child property
-                var bigItemLocations = spawner.m_BigItemLocations;
-                
-                if (bigItemLocations != null && bigItemLocations.Count > 0)
-                {
-                    for (int i = 0; i < bigItemLocations.Count; i++)
-                    {
-                        var location = bigItemLocations[i];
-                        if (location == null) continue;
-                        
-                        // Check if this location has a spawned child
-                        var child = location.Child;
-                        if (child == null) continue;
-                        
-                        AddBigItemToTracked(child, null);
-                    }
-                }
-            }
-            catch (System.Exception ex)
-            {
-                MelonLogger.Error($"[BeachcombingDetector] Error in ScanSpawnedBigItems: {ex}");
-            }
-        }
-        
-        private void AddBigItemToTracked(CustomSpawnedItem customSpawnedItem, string suffix)
-        {
-            try
-            {
-                // Get the GameObject from the CustomSpawnedItem component
-                GameObject item = customSpawnedItem.gameObject;
-                if (item == null) return;
-                
-                // Skip if already added
-                if (addedObjects.Contains(item)) return;
-                
-                // Check for GearItem component
-                GearItem gearItem = item.GetComponent<GearItem>();
-                if (gearItem != null)
-                {
-                    string itemName = gearItem.name;
-                    try
-                    {
-                        string displayName = gearItem.DisplayName;
-                        if (!string.IsNullOrEmpty(displayName))
-                            itemName = displayName;
-                    }
-                    catch { }
-                    
-                    if (!string.IsNullOrEmpty(suffix))
-                        itemName += " " + suffix;
-                    
-                    trackedItems.Add(new BeachcombingItem
-                    {
-                        GameObject = item,
-                        DisplayName = itemName,
-                        Distance = 0f,
-                        IsContainer = false
-                    });
-                    addedObjects.Add(item);
-                    return;
-                }
-                
-                // Check for Container component
-                Container container = item.GetComponent<Container>();
-                if (container != null)
-                {
-                    string containerName = $"Container ({item.name})";
-                    if (!string.IsNullOrEmpty(suffix))
-                        containerName += " " + suffix;
-                    
-                    trackedItems.Add(new BeachcombingItem
-                    {
-                        GameObject = item,
-                        DisplayName = containerName,
-                        Distance = 0f,
-                        IsContainer = true
-                    });
-                    addedObjects.Add(item);
-                }
-            }
-            catch (System.Exception ex)
-            {
-                MelonLogger.Error($"[BeachcombingDetector] Error in AddBigItemToTracked: {ex}");
             }
         }
         
@@ -476,53 +369,6 @@ namespace BeachcombingDetector
                             addedObjects.Add(spawnedObj);
                             continue;
                         }
-                        
-                        // Check for Container component in children
-                        Container containerInChildren = spawnedObj.GetComponentInChildren<Container>();
-                        if (containerInChildren != null)
-                        {
-                            GameObject containerObj = containerInChildren.gameObject;
-                            
-                            // Skip if already added (in case container is same as parent)
-                            if (addedObjects.Contains(containerObj)) continue;
-                            
-                            trackedItems.Add(new BeachcombingItem
-                            {
-                                GameObject = containerObj,
-                                DisplayName = $"Container ({containerObj.name})",
-                                Distance = 0f,
-                                IsContainer = true
-                            });
-                            addedObjects.Add(containerObj);
-                            continue;
-                        }
-                    }
-                }
-                
-                // Scan pending spawns (items that will spawn when player gets close)
-                var pendingSpawns = radialSpawner.m_PendingSpawns;
-                
-                if (pendingSpawns != null && pendingSpawns.Count > 0)
-                {
-                    for (int i = 0; i < pendingSpawns.Count; i++)
-                    {
-                        var pendingSpawn = pendingSpawns[i];
-                        if (pendingSpawn == null) continue;
-                        
-                        // Use prefab name as display name (pending items don't have GameObject yet)
-                        string prefabName = pendingSpawn.m_PrefabName;
-                        if (string.IsNullOrEmpty(prefabName)) continue;
-                        
-                        // Create a placeholder item for pending spawn
-                        // We'll use position for distance calculation
-                        trackedItems.Add(new BeachcombingItem
-                        {
-                            GameObject = null, // No GameObject yet, item not spawned
-                            Position = pendingSpawn.m_Position, // Store position for distance calc
-                            DisplayName = $"{prefabName} (not spawned)",
-                            Distance = 0f,
-                            IsContainer = false
-                        });
                     }
                 }
             }
