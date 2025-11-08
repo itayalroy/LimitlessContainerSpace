@@ -20,8 +20,10 @@ namespace BeachcombingDetector
     internal sealed class Implementation : MelonMod
     {
         private const float DISTANCE_UPDATE_INTERVAL = 0.25f; // Update distances 4 times per second
+        private const float SEARCH_RADIUS = 15f; // Search within 15 meters of spawn point
         
         private List<BeachcombingItem> trackedItems = new List<BeachcombingItem>();
+        private HashSet<GameObject> addedObjects = new HashSet<GameObject>(); // Track duplicates
         private float distanceUpdateTimer = 0f;
         private bool showResults = false;
         
@@ -139,6 +141,7 @@ namespace BeachcombingDetector
             {
                 // Clear previous results
                 trackedItems.Clear();
+                addedObjects.Clear(); // Clear duplicate tracker
                 
                 // Find all BeachcombingSpawner instances in the scene
                 BeachcombingSpawner[] spawners = GameObject.FindObjectsOfType<BeachcombingSpawner>();
@@ -156,6 +159,9 @@ namespace BeachcombingDetector
                     
                     // Check already-spawned big items
                     ScanSpawnedBigItems(spawner);
+                    
+                    // Scan big item locations with Physics
+                    ScanBigItemLocations(spawner);
                     
                     // Scan Radial Spawners (for small items)
                     ScanRadialSpawners(spawner);
@@ -230,6 +236,9 @@ namespace BeachcombingDetector
                 GameObject item = customSpawnedItem.gameObject;
                 if (item == null) return;
                 
+                // Skip if already added
+                if (addedObjects.Contains(item)) return;
+                
                 // Check for GearItem component
                 GearItem gearItem = item.GetComponent<GearItem>();
                 if (gearItem != null)
@@ -253,6 +262,7 @@ namespace BeachcombingDetector
                         Distance = 0f,
                         IsContainer = false
                     });
+                    addedObjects.Add(item);
                     return;
                 }
                 
@@ -271,11 +281,106 @@ namespace BeachcombingDetector
                         Distance = 0f,
                         IsContainer = true
                     });
+                    addedObjects.Add(item);
                 }
             }
             catch (System.Exception ex)
             {
                 MelonLogger.Error($"[BeachcombingDetector] Error in AddBigItemToTracked: {ex}");
+            }
+        }
+        
+        private void ScanBigItemLocations(BeachcombingSpawner spawner)
+        {
+            try
+            {
+                var bigItemLocations = spawner.m_BigItemLocations;
+                
+                if (bigItemLocations == null || bigItemLocations.Count == 0)
+                {
+                    return;
+                }
+                
+                for (int i = 0; i < bigItemLocations.Count; i++)
+                {
+                    var location = bigItemLocations[i];
+                    if (location == null) continue;
+                    
+                    // Get the position of this location
+                    Vector3 locationPos = location.transform.position;
+                    
+                    // Search for nearby objects
+                    SearchNearbyObjects(locationPos);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in ScanBigItemLocations: {ex}");
+            }
+        }
+        
+        private void SearchNearbyObjects(Vector3 position)
+        {
+            try
+            {
+                // Find all colliders within radius
+                Collider[] colliders = Physics.OverlapSphere(position, SEARCH_RADIUS);
+                
+                foreach (Collider collider in colliders)
+                {
+                    if (collider == null || collider.gameObject == null) continue;
+                    
+                    GameObject obj = collider.gameObject;
+                    
+                    // Skip if already added
+                    if (addedObjects.Contains(obj)) continue;
+                    
+                    // Check for GearItem component (items in the world)
+                    GearItem gearItem = obj.GetComponent<GearItem>();
+                    if (gearItem != null)
+                    {
+                        string itemName = gearItem.name;
+                        try
+                        {
+                            // Try to get display name if available
+                            string displayName = gearItem.DisplayName;
+                            if (!string.IsNullOrEmpty(displayName))
+                                itemName = displayName;
+                        }
+                        catch { }
+                        
+                        // Add to tracked items
+                        trackedItems.Add(new BeachcombingItem
+                        {
+                            GameObject = obj,
+                            DisplayName = itemName,
+                            Distance = 0f,
+                            IsContainer = false
+                        });
+                        addedObjects.Add(obj);
+                        continue;
+                    }
+                    
+                    // Check for Container component
+                    Container container = obj.GetComponent<Container>();
+                    if (container != null)
+                    {
+                        // Add to tracked items
+                        trackedItems.Add(new BeachcombingItem
+                        {
+                            GameObject = obj,
+                            DisplayName = $"Container ({obj.name})",
+                            Distance = 0f,
+                            IsContainer = true
+                        });
+                        addedObjects.Add(obj);
+                        continue;
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Error($"[BeachcombingDetector] Error in SearchNearbyObjects: {ex}");
             }
         }
         
@@ -330,6 +435,9 @@ namespace BeachcombingDetector
                         GameObject spawnedObj = spawns[i];
                         if (spawnedObj == null) continue;
                         
+                        // Skip if already added
+                        if (addedObjects.Contains(spawnedObj)) continue;
+                        
                         // Check for GearItem component
                         GearItem gearItem = spawnedObj.GetComponent<GearItem>();
                         if (gearItem != null)
@@ -350,10 +458,11 @@ namespace BeachcombingDetector
                                 Distance = 0f,
                                 IsContainer = false
                             });
+                            addedObjects.Add(spawnedObj);
                             continue;
                         }
                         
-                        // Check for Container component
+                        // Check for Container component on the object itself
                         Container container = spawnedObj.GetComponent<Container>();
                         if (container != null)
                         {
@@ -364,6 +473,28 @@ namespace BeachcombingDetector
                                 Distance = 0f,
                                 IsContainer = true
                             });
+                            addedObjects.Add(spawnedObj);
+                            continue;
+                        }
+                        
+                        // Check for Container component in children
+                        Container containerInChildren = spawnedObj.GetComponentInChildren<Container>();
+                        if (containerInChildren != null)
+                        {
+                            GameObject containerObj = containerInChildren.gameObject;
+                            
+                            // Skip if already added (in case container is same as parent)
+                            if (addedObjects.Contains(containerObj)) continue;
+                            
+                            trackedItems.Add(new BeachcombingItem
+                            {
+                                GameObject = containerObj,
+                                DisplayName = $"Container ({containerObj.name})",
+                                Distance = 0f,
+                                IsContainer = true
+                            });
+                            addedObjects.Add(containerObj);
+                            continue;
                         }
                     }
                 }
