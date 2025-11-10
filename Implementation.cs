@@ -9,16 +9,6 @@ using System.Reflection;
 
 namespace BeachcombingDetector
 {
-    [HarmonyPatch(typeof(RadialObjectSpawner), "GetDistanceFromOuterRadiusToCamera")]
-    public class GetDistanceFromOuterRadiusToCameraPatch
-    {
-        static bool Prefix(ref float __result)
-        {
-            __result = 0f; // Always within range
-            return false; // Skip original method
-        }
-    }
-
     [HarmonyPatch(typeof(BeachcombingSpawner), "IsPlayerCloseToAnyBigItemSpawnLocations")]
     public class IsPlayerCloseToAnyBigItemSpawnLocationsPatch
     {
@@ -53,7 +43,6 @@ namespace BeachcombingDetector
         {
             MelonLogger.Msg("Beachcombing Detector mod loaded!");
             MelonLogger.Msg("- Press F3 to toggle beachcombing item overlay");
-            MelonLogger.Msg("- Patched RadialObjectSpawner to bypass distance checks");
         }
         
         public override void OnUpdate()
@@ -315,6 +304,9 @@ namespace BeachcombingDetector
                 {
                     var radialSpawner = childSpawners[i];
                     if (radialSpawner == null) continue;
+                    
+                    // Force spawn attempt to ensure items are spawned
+                    radialSpawner.SpawnAttemptAllNoVisChecks();
                     
                     // Print radial spawner info when first found
                     MelonLogger.Msg($"=== Radial Spawner #{i} Info ===");
